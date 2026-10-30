@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FreshBasket</title>
+<style>
+:root{--bg:#f4f8ef;--card:#fff;--tx:#1b2b1e;--mu:#667a6a;--ac:#2a7a3b;--ac2:#e3f1de;--hi:#f2b705;--bd:#d9e4d3}
+@media (prefers-color-scheme:dark){:root{--bg:#111812;--card:#1b251c;--tx:#e7efe4;--mu:#9bad9d;--ac:#6fcb80;--ac2:#243527;--bd:#2c3a2e;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:84px}
+header{padding:18px 16px 4px;max-width:900px;margin:auto}
+h1{margin:0;font-size:24px}h3{margin:22px 0 0}
+header p{margin:4px 0 0;color:var(--mu);font-size:14px}
+nav{display:flex;gap:8px;padding:10px 16px;overflow-x:auto;max-width:900px;margin:auto}
+.chip{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:7px 14px;border-radius:20px;font-size:14px;white-space:nowrap;text-transform:capitalize;cursor:pointer}
+.chip.on{background:var(--ac);color:var(--bg);border-color:var(--ac)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:6px 16px;max-width:900px;margin:auto}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:3px}
+.card.out{opacity:.55}.card.wide{display:block;margin-bottom:10px}
+.em{font-size:38px;line-height:1.1}.big{font-size:58px}
+small,.mu{color:var(--mu);font-size:13px}.price{color:var(--ac);font-weight:700}
+.btn{background:var(--ac);color:var(--bg);border:0;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:700;text-decoration:none;display:inline-block;cursor:pointer}
+.btn.sm{padding:8px;margin-top:4px}.btn.wide{width:100%;margin-top:12px}
+.link{background:none;border:0;color:var(--ac);font-size:14px;cursor:pointer;padding:4px}
+.step{display:flex;align-items:center;justify-content:space-between;background:var(--ac2);border-radius:10px;margin-top:4px;font-weight:700}
+.step button{border:0;background:none;color:var(--ac);font-size:22px;width:42px;height:36px;cursor:pointer}
+.bar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:2px solid var(--hi);font-weight:700}
+.pad{padding:12px 16px;max-width:560px;margin:auto}.center{text-align:center}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--bd)}
+.tot{font-size:18px}
+label{display:block;font-size:13px;color:var(--mu);margin-top:10px}
+input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font-size:16px;margin-top:4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pr{width:76px;display:inline-block;margin:0;padding:6px}
+.inl{display:inline;margin:0;color:var(--tx)}.inl input{width:auto;margin-right:4px}
+footer{text-align:center;padding:20px;font-size:13px}a{color:var(--ac)}
+</style></head>
+<body><div id="app"><p class="pad mu">Loading…</p></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+// 1. Paste your Supabase values (Project Settings > API). The anon key is safe to put here.
+var SB_URL='https://wamcvugwhydzqmidjgni.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbWN2dWd3aHlkenFtaWRqZ25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMDc1ODMsImV4cCI6MjEwODg4MzU4M30.dErHW5YI6C1uyO7EF7IlUs9tlA50dDYNo7R_8VFE3G4';
+var sb=supabase.createClient(SB_URL,SB_KEY);
+var S={apts:[],prods:[],orders:[],wa:'',cust:{}},aptId=null,ready=false,msg='';
+var cart={},cat='All',view='shop',lastOrder=null,tab='orders',authed=false;
+try{S.cust=JSON.parse(localStorage.getItem('fb_cust'))||{}}catch(e){}
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function mapP(r){return{id:r.id,name:r.name,cat:r.category,unit:r.unit,price:+r.price,em:r.emoji||'🛒',stock:r.in_stock}}
+function apt(){var h=location.hash.slice(1),m=S.apts.filter(function(x){return x.id==h})[0];if(m)aptId=m.id;return S.apts.filter(function(x){return x.id==aptId})[0]||S.apts[0]}
+function lines(){return Object.keys(cart).map(function(id){return{p:S.prods.filter(function(x){return x.id==id})[0],q:cart[id]}}).filter(function(x){return x.p&&x.q>0})}
+function total(){return lines().reduce(function(a,x){return a+x.p.price*x.q},0)}
+function count(){return lines().reduce(function(a,x){return a+x.q},0)}
+function go(v){view=v;msg='';render();window.scrollTo(0,0)}
+function chg(id,d){cart[id]=Math.max(0,(cart[id]||0)+d);render()}
+function setCat(c){cat=c;render()}
+
+async function load(){
+ var a=await sb.from('apartments').select('*').eq('active',true).order('name');
+ var p=await sb.from('products').select('*').order('id');
+ var s=await sb.from('settings').select('*').eq('key','whatsapp');
+ ready=true;
+ if(a.error||p.error){msg='Could not load the shop. Check the Supabase URL and key in index.html.'}
+ else{S.apts=a.data;S.prods=p.data.map(mapP);S.wa=((s.data||[])[0]||{}).value||''}
+ render()}
+async function loadOrders(){var r=await sb.from('orders').select('*,order_items(*)').order('id',{ascending:false});S.orders=r.data||[]}
+
+function card(p){var q=cart[p.id]||0;
+ var act=!p.stock?'<small>Out of stock</small>':q?'<div class="step"><button onclick="chg('+p.id+',-1)" aria-label="Remove one">−</button><span>'+q+'</span><button onclick="chg('+p.id+',1)" aria-label="Add one">+</button></div>':'<button class="btn sm" onclick="chg('+p.id+',1)">Add</button>';
+ return '<div class="card '+(p.stock?'':'out')+'"><div class="em">'+p.em+'</div><b>'+esc(p.name)+'</b><small>'+esc(p.unit)+'</small><span class="price">₹'+p.price+'</span>'+act+'</div>'}
+
+function shop(){
+ var a=apt();if(!a)return '<main class="pad"><h1>FreshBasket</h1><p class="mu">'+esc(msg||'No apartments are open for delivery yet.')+'</p></main>';
+ var cats=['All'].concat(S.prods.map(function(p){return p.cat}).filter(function(c,i,x){return x.indexOf(c)==i}));
+ var list=S.prods.filter(function(p){return cat=='All'||p.cat==cat}),n=count();
+ return '<header><h1>🥬 FreshBasket</h1><p>'+esc(a.name)+'<br>Order by '+esc(a.cutoff)+' for delivery tomorrow, '+esc(a.slot)+'.</p></header>'
+ +'<nav>'+cats.map(function(c){return '<button class="chip '+(c==cat?'on':'')+'" onclick="setCat(\''+c+'\')">'+c+'</button>'}).join('')+'</nav>'
+ +'<main class="grid">'+list.map(card).join('')+'</main>'
+ +(n?'<div class="bar"><span>'+n+' items, ₹'+total()+'</span><button class="btn" onclick="go(\'checkout\')">View cart</button></div>':'')}
+
+function checkout(){var c=S.cust;
+ return '<header><button class="link" onclick="go(\'shop\')">Back to products</button><h1>Your order</h1></header><main class="pad">'
+ +lines().map(function(x){return '<div class="row"><span>'+x.p.em+' '+esc(x.p.name)+' × '+x.q+'</span><b>₹'+x.p.price*x.q+'</b></div>'}).join('')
+ +'<div class="row tot"><span>Total</span><b>₹'+total()+'</b></div>'
+ +'<label>Name<input id="nm" value="'+esc(c.name)+'"></label>'
+ +'<label>Phone number<input id="ph" inputmode="numeric" maxlength="10" value="'+esc(c.phone)+'"></label>'
+ +'<div class="two"><label>Block or tower<input id="bl" value="'+esc(c.block)+'"></label><label>Flat number<input id="fl" value="'+esc(c.flat)+'"></label></div>'
+ +'<label>Payment<select id="pm"><option>Cash on delivery</option><option>UPI on delivery</option></select></label>'
+ +'<p class="mu" id="err" role="alert"></p><button class="btn wide" id="pb" onclick="place()">Place order</button></main>'}
+
+async function place(){
+ var g=function(i){return $(i).value.trim()},c={name:g('nm'),phone:g('ph'),block:g('bl'),flat:g('fl')};
+ if(!c.name||!/^\d{10}$/.test(c.phone)||!c.flat){$('err').textContent='Enter your name, a 10-digit phone number and your flat number.';return}
+ $('pb').disabled=true;$('err').textContent='Placing your order…';
+ var L=lines(),pay=g('pm');
+ var r=await sb.rpc('place_order',{p_apt:apt().id,p_name:c.name,p_phone:c.phone,p_block:c.block,p_flat:c.flat,p_pay:pay,items:L.map(function(x){return{id:x.p.id,q:x.q}})});
+ if(r.error){$('pb').disabled=false;$('err').textContent='Could not place the order. Please try again.';return}
+ S.cust=c;try{localStorage.setItem('fb_cust',JSON.stringify(c))}catch(e){}
+ lastOrder={id:r.data,c:c,pay:pay,total:total(),L:L};cart={};go('done')}
+
+function done(){var o=lastOrder;
+ var m='New order #'+o.id+'\n'+o.c.name+', '+o.c.phone+'\n'+o.c.block+' '+o.c.flat+', '+apt().name+'\n'
+  +o.L.map(function(x){return x.p.name+' ('+x.p.unit+') x '+x.q}).join('\n')+'\nTotal Rs '+o.total+', '+o.pay;
+ return '<main class="pad center"><div class="em big">✅</div><h2>Order placed</h2><p>Order #'+o.id+', ₹'+o.total+'<br>Delivery tomorrow, '+esc(apt().slot)+'.</p>'
+ +(S.wa?'<a class="btn" target="_blank" rel="noopener" href="https://wa.me/'+S.wa+'?text='+encodeURIComponent(m)+'">Send order on WhatsApp</a><br><br>':'')
+ +'<button class="link" onclick="go(\'shop\')">Order more</button></main>'}
+
+async function login(){var r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});
+ if(r.error){msg='Wrong email or password.'}else{authed=true;msg='';await loadOrders()}render()}
+async function logout(){await sb.auth.signOut();authed=false;render()}
+
+function admin(){
+ if(!authed)return '<main class="pad"><h1>Owner login</h1><label>Email<input id="em" type="email"></label><label>Password<input id="pw" type="password"></label><p class="mu">'+esc(msg)+'</p><button class="btn wide" onclick="login()">Sign in</button></main>';
+ var tabs=['orders','products','shopping list'].map(function(t){return '<button class="chip '+(t==tab?'on':'')+'" onclick="tab=\''+t+'\';render()">'+t+'</button>'}).join('');
+ return '<header><h1>Admin</h1><button class="link" onclick="logout()">Sign out</button></header><nav>'+tabs+'</nav><main class="pad">'+(tab=='orders'?ords():tab=='products'?prods():shopl())+'</main>'}
+
+function ords(){
+ if(!S.orders.length)return '<p class="mu">No orders yet.</p>';
+ return S.orders.map(function(o){
+  return '<div class="card wide"><b>#'+o.id+', ₹'+o.total+'</b> <small>'+esc(new Date(o.created_at).toLocaleString())+'</small><br>'+esc(o.customer_name)+', <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a><br>'+esc(o.block)+' '+esc(o.flat)+', '+esc(o.apartment_id)+', '+esc(o.payment)
+  +'<br><small>'+o.order_items.map(function(l){return esc(l.product_name)+' × '+l.qty}).join(', ')+'</small>'
+  +'<select onchange="setStatus('+o.id+',this.value)">'+['Placed','Packed','Out for delivery','Delivered'].map(function(s){return '<option '+(s==o.status?'selected':'')+'>'+s+'</option>'}).join('')+'</select></div>'}).join('')}
+async function setStatus(id,v){await sb.from('orders').update({status:v}).eq('id',id);await loadOrders()}
+
+function shopl(){var m={};
+ S.orders.filter(function(o){return o.status=='Placed'}).forEach(function(o){o.order_items.forEach(function(l){var k=l.product_name+' ('+l.unit+')';m[k]=(m[k]||0)+l.qty})});
+ var k=Object.keys(m);if(!k.length)return '<p class="mu">Nothing to buy right now.</p>';
+ return '<p class="mu">Total to buy for orders still marked Placed.</p>'+k.map(function(x){return '<div class="row"><span>'+esc(x)+'</span><b>× '+m[x]+'</b></div>'}).join('')}
+
+function prods(){
+ return S.prods.map(function(p){
+  return '<div class="row"><span>'+p.em+' '+esc(p.name)+' <small>'+esc(p.unit)+'</small></span><span>₹<input class="pr" type="number" value="'+p.price+'" onchange="upd('+p.id+',{price:+this.value})"> <label class="inl"><input type="checkbox" '+(p.stock?'checked':'')+' onchange="upd('+p.id+',{in_stock:this.checked})">in stock</label> <button class="link" aria-label="Delete" onclick="delp('+p.id+')">✕</button></span></div>'}).join('')
+ +'<h3>Add a product</h3><div class="two"><label>Name<input id="an"></label><label>Price (₹)<input id="ap" type="number"></label><label>Unit<input id="au" value="500 g"></label><label>Category<select id="ac"><option>Vegetables</option><option>Greens</option><option>Dairy</option></select></label></div><button class="btn wide" onclick="addp()">Add product</button>'
+ +'<h3>Your WhatsApp number</h3><input value="'+esc(S.wa)+'" onchange="setWa(this.value)"><p class="mu">Include the country code, for example 919876543210.</p>'}
+async function upd(id,v){await sb.from('products').update(v).eq('id',id);await load()}
+async function delp(id){await sb.from('products').delete().eq('id',id);await load()}
+async function setWa(v){await sb.from('settings').upsert({key:'whatsapp',value:v.replace(/\D/g,'')});await load()}
+async function addp(){var n=$('an').value.trim(),p=+$('ap').value,c=$('ac').value;if(!n||!p)return;
+ await sb.from('products').insert({name:n,category:c,unit:$('au').value.trim()||'1 pc',price:p,emoji:{Vegetables:'🥕',Greens:'🌿',Dairy:'🥛'}[c]});await load()}
+
+function render(){
+ if(!ready)return;
+ var h=location.hash=='#admin',v=h?'admin':(view=='admin'?'shop':view);
+ var views={shop:shop,checkout:checkout,done:done,admin:admin};
+ $('app').innerHTML=views[v]()+((v=='shop'||h)?'<footer>'+(h?'<a href="#">Back to customer view</a>':'<a href="#admin">Shop owner login</a>')+'</footer>':'')}
+window.addEventListener('hashchange',async function(){if(location.hash=='#admin'&&authed)await loadOrders();render()});
+sb.auth.getSession().then(async function(r){if(r.data.session){authed=true;await loadOrders()}load()});
+</script></body></html>
