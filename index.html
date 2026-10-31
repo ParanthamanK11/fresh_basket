@@ -72,7 +72,7 @@ function shop(){
  var a=apt();if(!a)return '<main class="pad"><h1>FreshBasket</h1><p class="mu">'+esc(msg||'No apartments are open for delivery yet.')+'</p></main>';
  var cats=['All'].concat(S.prods.map(function(p){return p.cat}).filter(function(c,i,x){return x.indexOf(c)==i}));
  var list=S.prods.filter(function(p){return cat=='All'||p.cat==cat}),n=count();
- return '<header><h1>🥬 FreshBasket</h1><p>'+esc(a.name)+'<br>Order by '+esc(a.cutoff)+' for delivery tomorrow, '+esc(a.slot)+'.</p></header>'
+ return '<header><h1>🥬 FreshBasket</h1><p>'+esc(a.name)+'<br>Order by '+esc(a.cutoff)+' for delivery tomorrow, '+esc(a.slot)+'.</p><button class="link" onclick="go(\'track\')">Track my order</button></header>'
  +'<nav>'+cats.map(function(c){return '<button class="chip '+(c==cat?'on':'')+'" onclick="setCat(\''+c+'\')">'+c+'</button>'}).join('')+'</nav>'
  +'<main class="grid">'+list.map(card).join('')+'</main>'
  +(n?'<div class="bar"><span>'+n+' items, ₹'+total()+'</span><button class="btn" onclick="go(\'checkout\')">View cart</button></div>':'')}
@@ -94,7 +94,7 @@ async function place(){
  var L=lines(),pay=g('pm');
  var r=await sb.rpc('place_order',{p_apt:apt().id,p_name:c.name,p_phone:c.phone,p_block:c.block,p_flat:c.flat,p_pay:pay,items:L.map(function(x){return{id:x.p.id,q:x.q}})});
  if(r.error){$('pb').disabled=false;$('err').textContent='Could not place the order. Please try again.';return}
- S.cust=c;try{localStorage.setItem('fb_cust',JSON.stringify(c))}catch(e){}
+ S.cust=c;try{localStorage.setItem('fb_cust',JSON.stringify(c));localStorage.setItem('fb_last',JSON.stringify({id:r.data,phone:c.phone}))}catch(e){}
  lastOrder={id:r.data,c:c,pay:pay,total:total(),L:L};cart={};go('done')}
 
 function done(){var o=lastOrder;
@@ -102,7 +102,7 @@ function done(){var o=lastOrder;
   +o.L.map(function(x){return x.p.name+' ('+x.p.unit+') x '+x.q}).join('\n')+'\nTotal Rs '+o.total+', '+o.pay;
  return '<main class="pad center"><div class="em big">✅</div><h2>Order placed</h2><p>Order #'+o.id+', ₹'+o.total+'<br>Delivery tomorrow, '+esc(apt().slot)+'.</p>'
  +(S.wa?'<a class="btn" target="_blank" rel="noopener" href="https://wa.me/'+S.wa+'?text='+encodeURIComponent(m)+'">Send order on WhatsApp</a><br><br>':'')
- +'<button class="link" onclick="go(\'shop\')">Order more</button></main>'}
+ +'<button class="btn" onclick="trackNow()">Track this order</button><br><br><button class="link" onclick="go(\'shop\')">Order more</button></main>'}
 
 async function login(){var r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});
  if(r.error){msg='Wrong email or password.'}else{authed=true;msg='';await loadOrders()}render()}
@@ -113,13 +113,17 @@ function admin(){
  var tabs=['orders','products','shopping list'].map(function(t){return '<button class="chip '+(t==tab?'on':'')+'" onclick="tab=\''+t+'\';render()">'+t+'</button>'}).join('');
  return '<header><h1>Admin</h1><button class="link" onclick="logout()">Sign out</button></header><nav>'+tabs+'</nav><main class="pad">'+(tab=='orders'?ords():tab=='products'?prods():shopl())+'</main>'}
 
+function waLink(o){
+ var st={'Placed':'has been received','Packed':'is packed','Out for delivery':'is out for delivery','Delivered':'has been delivered'}[o.status]||'is being processed';
+ var m='Hi '+o.customer_name+', your FreshBasket order #'+o.id+' '+st+'. Total Rs '+o.total+'. Thank you!';
+ return 'https://wa.me/91'+o.phone+'?text='+encodeURIComponent(m)}
 function ords(){
  if(!S.orders.length)return '<p class="mu">No orders yet.</p>';
  return S.orders.map(function(o){
   return '<div class="card wide"><b>#'+o.id+', ₹'+o.total+'</b> <small>'+esc(new Date(o.created_at).toLocaleString())+'</small><br>'+esc(o.customer_name)+', <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a><br>'+esc(o.block)+' '+esc(o.flat)+', '+esc(o.apartment_id)+', '+esc(o.payment)
   +'<br><small>'+o.order_items.map(function(l){return esc(l.product_name)+' × '+l.qty}).join(', ')+'</small>'
-  +'<select onchange="setStatus('+o.id+',this.value)">'+['Placed','Packed','Out for delivery','Delivered'].map(function(s){return '<option '+(s==o.status?'selected':'')+'>'+s+'</option>'}).join('')+'</select></div>'}).join('')}
-async function setStatus(id,v){await sb.from('orders').update({status:v}).eq('id',id);await loadOrders()}
+  +'<select onchange="setStatus('+o.id+',this.value)">'+['Placed','Packed','Out for delivery','Delivered'].map(function(s){return '<option '+(s==o.status?'selected':'')+'>'+s+'</option>'}).join('')+'</select><a class="btn sm" target="_blank" rel="noopener" href="'+waLink(o)+'">Message customer on WhatsApp</a></div>'}).join('')}
+async function setStatus(id,v){await sb.from('orders').update({status:v}).eq('id',id);await loadOrders();render()}
 
 function shopl(){var m={};
  S.orders.filter(function(o){return o.status=='Placed'}).forEach(function(o){o.order_items.forEach(function(l){var k=l.product_name+' ('+l.unit+')';m[k]=(m[k]||0)+l.qty})});
@@ -137,10 +141,29 @@ async function setWa(v){await sb.from('settings').upsert({key:'whatsapp',value:v
 async function addp(){var n=$('an').value.trim(),p=+$('ap').value,c=$('ac').value;if(!n||!p)return;
  await sb.from('products').insert({name:n,category:c,unit:$('au').value.trim()||'1 pc',price:p,emoji:{Vegetables:'🥕',Greens:'🌿',Dairy:'🥛'}[c]});await load()}
 
+var trk=null,trkMsg='',tid='',tph='';
+function track(){
+ var l={};try{l=JSON.parse(localStorage.getItem('fb_last'))||{}}catch(e){}
+ var steps=['Placed','Packed','Out for delivery','Delivered'],body='';
+ if(trk){var i=steps.indexOf(trk.status);
+  body='<div class="card wide" style="margin-top:16px"><b>Order #'+trk.id+', ₹'+trk.total+'</b><br><small>'+esc(new Date(trk.created_at).toLocaleString())+(trk.slot?', delivery '+esc(trk.slot):'')+'</small>'
+  +steps.map(function(s,k){return '<div class="row"><span>'+(k<=i?'✅':'⬜')+' '+s+'</span></div>'}).join('')
+  +'<small>'+trk.items.map(function(x){return esc(x.name)+' ('+esc(x.unit)+') × '+x.qty}).join(', ')+'</small></div>'}
+ return '<header><button class="link" onclick="go(\'shop\')">Back to products</button><h1>Track my order</h1></header><main class="pad">'
+ +'<label>Order number<input id="to" inputmode="numeric" value="'+esc(tid||l.id||'')+'"></label>'
+ +'<label>Phone number used for the order<input id="tp" inputmode="numeric" maxlength="10" value="'+esc(tph||l.phone||S.cust.phone||'')+'"></label>'
+ +'<p class="mu" role="alert">'+esc(trkMsg)+'</p><button class="btn wide" onclick="doTrack()">Check status</button>'+body+'</main>'}
+async function doTrack(){
+ tid=$('to').value.replace(/\D/g,'');tph=$('tp').value.trim();trk=null;
+ if(!tid||!/^\d{10}$/.test(tph)){trkMsg='Enter your order number and your 10-digit phone number.';render();return}
+ var r=await sb.rpc('track_order',{p_id:+tid,p_phone:tph});
+ if(r.error||!r.data){trkMsg='No order found. Please check the order number and phone number.'}else{trk=r.data;trkMsg=''}
+ render()}
+function trackNow(){tid=lastOrder.id;tph=lastOrder.c.phone;go('track');doTrack()}
 function render(){
  if(!ready)return;
  var h=location.hash=='#admin',v=h?'admin':(view=='admin'?'shop':view);
- var views={shop:shop,checkout:checkout,done:done,admin:admin};
+ var views={shop:shop,checkout:checkout,done:done,admin:admin,track:track};
  $('app').innerHTML=views[v]()+((v=='shop'||h)?'<footer>'+(h?'<a href="#">Back to customer view</a>':'<a href="#admin">Shop owner login</a>')+'</footer>':'')}
 window.addEventListener('hashchange',async function(){if(location.hash=='#admin'&&authed)await loadOrders();render()});
 sb.auth.getSession().then(async function(r){if(r.data.session){authed=true;await loadOrders()}load()});
