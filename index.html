@@ -37,12 +37,14 @@ footer{text-align:center;padding:20px;font-size:13px}a{color:var(--ac)}
 <body><div id="app"><p class="pad mu">Loading…</p></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="config.js"></script>
 <script>
-// 1. Paste your Supabase values (Project Settings > API). The anon key is safe to put here.
-var SB_URL='PASTE_PROJECT_URL',SB_KEY='PASTE_ANON_KEY';
+// Your Supabase URL and key live in config.js, so this file never needs editing for keys.
+var SB_URL=window.SB_URL,SB_KEY=window.SB_KEY;
+if(!SB_URL||!SB_KEY){document.getElementById('app').innerHTML='<p style="padding:20px">config.js is missing or empty. Add it next to index.html.</p>';throw new Error('config.js missing')}
 var sb=supabase.createClient(SB_URL,SB_KEY);
 var S={apts:[],prods:[],orders:[],wa:'',cust:{}},aptId=null,ready=false,msg='';
-var cart={},cat='All',view='shop',lastOrder=null,tab='orders',authed=false;
+var cart={},cat='All',view='home',lastOrder=null,tab='orders',authed=false;
 try{S.cust=JSON.parse(localStorage.getItem('fb_cust'))||{}}catch(e){}
 function $(i){return document.getElementById(i)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -69,11 +71,16 @@ function card(p){var q=cart[p.id]||0;
  var act=!p.stock?'<small>Out of stock</small>':q?'<div class="step"><button onclick="chg('+p.id+',-1)" aria-label="Remove one">−</button><span>'+q+'</span><button onclick="chg('+p.id+',1)" aria-label="Add one">+</button></div>':'<button class="btn sm" onclick="chg('+p.id+',1)">Add</button>';
  return '<div class="card '+(p.stock?'':'out')+'"><div class="em">'+p.em+'</div><b>'+esc(p.name)+'</b><small>'+esc(p.unit)+'</small><span class="price">₹'+p.price+'</span>'+act+'</div>'}
 
+function home(){var a=apt();
+ return '<main class="pad center"><div class="em big">🥬</div><h1>FreshBasket</h1><p class="mu">Fresh vegetables, greens and milk, delivered to your door.</p>'
+ +(a?'<p><b>'+esc(a.name)+'</b><br><small>Order by '+esc(a.cutoff)+' for delivery tomorrow, '+esc(a.slot)+'</small></p><button class="btn wide" onclick="go(\'shop\')">Start shopping</button>':'<p class="mu">'+esc(msg||'Loading…')+'</p>')
+ +'<button class="btn wide" style="background:var(--ac2);color:var(--ac)" onclick="go(\'track\')">Track my order</button>'
+ +'<div class="card wide" style="margin-top:20px;text-align:left"><b>How it works</b><br><small>1. Choose your vegetables, greens and milk<br>2. Place your order before the cutoff time<br>3. We deliver to your flat the next morning<br>4. Pay by cash or UPI</small></div></main>'}
 function shop(){
  var a=apt();if(!a)return '<main class="pad"><h1>FreshBasket</h1><p class="mu">'+esc(msg||'No apartments are open for delivery yet.')+'</p></main>';
  var cats=['All'].concat(S.prods.map(function(p){return p.cat}).filter(function(c,i,x){return x.indexOf(c)==i}));
  var list=S.prods.filter(function(p){return cat=='All'||p.cat==cat}),n=count();
- return '<header><h1>🥬 FreshBasket</h1><p>'+esc(a.name)+'<br>Order by '+esc(a.cutoff)+' for delivery tomorrow, '+esc(a.slot)+'.</p><button class="link" onclick="go(\'track\')">Track my order</button></header>'
+ return '<header><button class="link" onclick="go(\'home\')">← Home</button><h1>🥬 FreshBasket</h1><p>'+esc(a.name)+'<br>Order by '+esc(a.cutoff)+' for delivery tomorrow, '+esc(a.slot)+'.</p><button class="link" onclick="go(\'track\')">Track my order</button></header>'
  +'<nav>'+cats.map(function(c){return '<button class="chip '+(c==cat?'on':'')+'" onclick="setCat(\''+c+'\')">'+c+'</button>'}).join('')+'</nav>'
  +'<main class="grid">'+list.map(card).join('')+'</main>'
  +(n?'<div class="bar"><span>'+n+' items, ₹'+total()+'</span><button class="btn" onclick="go(\'checkout\')">View cart</button></div>':'')}
@@ -155,13 +162,15 @@ function shopl(){var m={};
 function prods(){
  return S.prods.map(function(p){
   return '<div class="row"><span>'+p.em+' '+esc(p.name)+' <small>'+esc(p.unit)+'</small></span><span>₹<input class="pr" type="number" value="'+p.price+'" onchange="upd('+p.id+',{price:+this.value})"> <label class="inl"><input type="checkbox" '+(p.stock?'checked':'')+' onchange="upd('+p.id+',{in_stock:this.checked})">in stock</label> <button class="link" aria-label="Delete" onclick="delp('+p.id+')">✕</button></span></div>'}).join('')
- +'<h3>Add a product</h3><div class="two"><label>Name<input id="an"></label><label>Price (₹)<input id="ap" type="number"></label><label>Unit<input id="au" value="500 g"></label><label>Category<select id="ac"><option>Vegetables</option><option>Greens</option><option>Dairy</option></select></label></div><button class="btn wide" onclick="addp()">Add product</button>'
+ +'<h3>Add a product</h3><div class="two"><label>Name<input id="an"></label><label>Price (₹)<input id="ap" type="number"></label><label>Unit<input id="au" value="500 g"></label><label>Category<select id="ac"><option>Vegetables</option><option>Greens</option><option>Dairy</option></select></label><label>Emoji (optional, automatic if blank)<input id="ae" placeholder="🍋"></label></div><button class="btn wide" onclick="addp()">Add product</button>'
  +'<h3>Your UPI ID</h3><input value="'+esc(S.upi)+'" placeholder="yourname@bank" onchange="setCfg(\'upi_id\',this.value.trim())"><label>Name shown to customers<input value="'+esc(S.upn)+'" onchange="setCfg(\'upi_name\',this.value.trim())"></label><p class="mu">Customers see this, with a QR code, when they choose UPI.</p><h3>Your WhatsApp number</h3><input value="'+esc(S.wa)+'" onchange="setWa(this.value)"><p class="mu">Include the country code, for example 919876543210.</p>'}
 async function upd(id,v){await sb.from('products').update(v).eq('id',id);await load()}
 async function delp(id){await sb.from('products').delete().eq('id',id);await load()}
 async function setWa(v){await sb.from('settings').upsert({key:'whatsapp',value:v.replace(/\D/g,'')});await load()}
+var EM=[[/tomato|thakkali/,'🍅'],[/onion|vengayam/,'🧅'],[/potato|urulai/,'🥔'],[/carrot/,'🥕'],[/brinjal|eggplant|kathiri/,'🍆'],[/bean|peas|avarai/,'🌱'],[/spinach|palak|keerai|cabbage|lettuce/,'🥬'],[/broccoli|cauliflower/,'🥦'],[/cucumber|vellari/,'🥒'],[/corn/,'🌽'],[/chilli|chili|milagai/,'🌶️'],[/capsicum|bell pepper/,'🫑'],[/garlic|poondu/,'🧄'],[/mushroom/,'🍄'],[/pumpkin/,'🎃'],[/lemon|lime/,'🍋'],[/banana|vazhai/,'🍌'],[/apple/,'🍎'],[/mango/,'🥭'],[/orange/,'🍊'],[/grape/,'🍇'],[/coconut/,'🥥'],[/coriander|mint|curry|leaf|leaves|herb|basil/,'🌿'],[/milk|paal/,'🥛'],[/curd|yogurt|yoghurt|thayir|buttermilk/,'🍶'],[/paneer|cheese/,'🧀'],[/butter|ghee/,'🧈'],[/egg/,'🥚'],[/bread/,'🍞'],[/radish|beet|yam/,'🥕']];
+function guessEmoji(n,c){n=n.toLowerCase();for(var i=0;i<EM.length;i++)if(EM[i][0].test(n))return EM[i][1];return{Vegetables:'🥬',Greens:'🌿',Dairy:'🥛'}[c]||'🛒'}
 async function addp(){var n=$('an').value.trim(),p=+$('ap').value,c=$('ac').value;if(!n||!p)return;
- await sb.from('products').insert({name:n,category:c,unit:$('au').value.trim()||'1 pc',price:p,emoji:{Vegetables:'🥕',Greens:'🌿',Dairy:'🥛'}[c]});await load()}
+ await sb.from('products').insert({name:n,category:c,unit:$('au').value.trim()||'1 pc',price:p,emoji:($('ae').value.trim()||guessEmoji(n,c))});await load()}
 
 var trk=null,trkMsg='',tid='',tph='';
 function track(){
@@ -196,8 +205,8 @@ function trackNow(){tid=lastOrder.id;tph=lastOrder.c.phone;go('track');doTrack()
 function render(){
  if(!ready)return;
  var h=location.hash=='#admin',v=h?'admin':(view=='admin'?'shop':view);
- var views={shop:shop,checkout:checkout,done:done,admin:admin,track:track};
- $('app').innerHTML=views[v]()+((v=='shop'||h)?'<footer>'+(h?'<a href="#">Back to customer view</a>':'<a href="#admin">Shop owner login</a>')+'</footer>':'')}
+ var views={home:home,shop:shop,checkout:checkout,done:done,admin:admin,track:track};
+ $('app').innerHTML=views[v]()+((v=='shop'||v=='home'||h)?'<footer>'+(h?'<a href="#">Back to customer view</a>':'<a href="#admin">Shop owner login</a>')+'</footer>':'')}
 window.addEventListener('hashchange',async function(){if(location.hash=='#admin'&&authed)await loadOrders();render()});
 sb.auth.getSession().then(async function(r){if(r.data.session){authed=true;await loadOrders()}load()});
 </script></body></html>
