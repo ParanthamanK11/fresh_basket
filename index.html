@@ -40,7 +40,7 @@ footer{text-align:center;padding:20px;font-size:13px}a{color:var(--ac)}
 <script src="config.js"></script>
 <script>
 // Your Supabase URL and key live in config.js, so this file never needs editing for keys.
-var SB_URL=window.SB_URL,SB_KEY=window.SB_KEY;
+var SB_URL='https://wamcvugwhydzqmidjgni.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbWN2dWd3aHlkenFtaWRqZ25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMDc1ODMsImV4cCI6MjEwODg4MzU4M30.dErHW5YI6C1uyO7EF7IlUs9tlA50dDYNo7R_8VFE3G4';
 if(!SB_URL||!SB_KEY){document.getElementById('app').innerHTML='<p style="padding:20px">config.js is missing or empty. Add it next to index.html.</p>';throw new Error('config.js missing')}
 var sb=supabase.createClient(SB_URL,SB_KEY);
 var S={apts:[],prods:[],orders:[],wa:'',cust:{}},aptId=null,ready=false,msg='';
